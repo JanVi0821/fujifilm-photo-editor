@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react'
-import './App.css'
 
 import { EditingPanel } from './components/EditingPanel'
 import { LeftSidebar } from './components/LeftSidebar'
@@ -67,7 +66,7 @@ function App() {
   )
 
   return (
-    <div className="app">
+    <div className="flex h-dvh flex-col overflow-hidden bg-app">
       <TopBar
         onExport={handleExport}
         onUpload={handleUpload}
@@ -75,7 +74,7 @@ function App() {
         isProcessing={isProcessing}
       />
 
-      <div className="workspace">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:overflow-hidden">
         <LeftSidebar
           filter={filter}
           strength={strength}
@@ -114,7 +113,11 @@ function App() {
         />
       </div>
 
-      {error && <div className="error-toast">{error}</div>}
+      {error && (
+        <div className="fixed bottom-[52px] left-1/2 z-100 max-w-[480px] -translate-x-1/2 rounded border border-[#5c2020] bg-[#3d1515] px-5 py-2.5 text-center text-xs text-[#ff6b6b]">
+          {error}
+        </div>
+      )}
 
       <StatusBar filter={filter} isDefaultImage={imageSource.kind === 'default'} />
     </div>

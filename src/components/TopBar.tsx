@@ -5,15 +5,22 @@ type TopBarProps = {
   isProcessing: boolean
 }
 
+const BTN_BASE =
+  'inline-flex items-center justify-center px-5 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] rounded-[2px] border cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
+
 export function TopBar({ onExport, onUpload, canExport, isProcessing }: TopBarProps) {
   return (
-    <header className="top-bar">
-      <div className="top-bar-left">
-        <h1 className="logo">Fujifilm Editor</h1>
+    <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-border bg-panel px-4 md:px-6">
+      <div className="flex items-center gap-8">
+        <h1 className="m-0 font-serif text-[16px] font-normal tracking-[0.02em] text-fg md:text-[18px]">
+          Fujifilm Editor
+        </h1>
       </div>
 
-      <div className="top-bar-right">
-        <label className="btn btn-ghost upload-btn">
+      <div className="flex items-center gap-3">
+        <label
+          className={`${BTN_BASE} border-border-light bg-transparent text-fg-secondary hover:bg-hover hover:text-fg`}
+        >
           <input
             type="file"
             accept="image/*"
@@ -27,7 +34,7 @@ export function TopBar({ onExport, onUpload, canExport, isProcessing }: TopBarPr
           Upload
         </label>
         <button
-          className="btn btn-primary"
+          className={`${BTN_BASE} border-accent bg-accent text-app hover:border-accent-hover hover:bg-accent-hover`}
           onClick={onExport}
           disabled={!canExport || isProcessing}
         >

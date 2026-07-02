@@ -82,6 +82,49 @@ void main() {
 }
 `
 
+// Fused filter stage: LUT sampling and strength blend in a single pass,
+// so the pipeline needs one fewer full-resolution framebuffer.
+export const FILTER_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uSource;
+uniform sampler2D uLutAtlas;
+uniform float uLutSize;
+uniform float uHasLut;
+uniform float uStrength;
+
+vec3 sampleLut(vec3 color) {
+  float size = uLutSize;
+  float slice = color.b * (size - 1.0);
+  float sliceFloor = floor(slice);
+  float sliceCeil = min(sliceFloor + 1.0, size - 1.0);
+  float sliceFrac = slice - sliceFloor;
+
+  vec2 quad1 = vec2(
+    (sliceFloor * size + color.r * (size - 1.0) + 0.5) / (size * size),
+    (color.g * (size - 1.0) + 0.5) / size
+  );
+  vec2 quad2 = vec2(
+    (sliceCeil * size + color.r * (size - 1.0) + 0.5) / (size * size),
+    (color.g * (size - 1.0) + 0.5) / size
+  );
+
+  vec3 c1 = texture2D(uLutAtlas, quad1).rgb;
+  vec3 c2 = texture2D(uLutAtlas, quad2).rgb;
+  return mix(c1, c2, sliceFrac);
+}
+
+void main() {
+  vec4 src = texture2D(uSource, vUv);
+  vec3 filtered = src.rgb;
+  if (uHasLut > 0.5) {
+    filtered = sampleLut(src.rgb);
+  }
+  float t = uStrength / 100.0;
+  gl_FragColor = vec4(mix(src.rgb, filtered, t), src.a);
+}
+`
+
 export const ADJUSTMENTS_FRAG = `
 precision highp float;
 varying vec2 vUv;

@@ -37,23 +37,27 @@ export function PreviewArea({
     }
   }, [imageUrl, imgRef, onImageLoad])
 
+  const canvasCls =
+    'block h-auto max-h-full w-auto max-w-full object-contain bg-black' +
+    (eyedropperActive ? ' cursor-crosshair' : '')
+
   return (
-    <main className="preview-area">
-      <div className="preview-frame">
+    <main className="sticky top-0 z-20 order-1 flex h-[45vh] min-h-0 w-full min-w-0 shrink-0 items-center justify-center overflow-auto border-b border-border bg-app p-4 md:static md:z-auto md:order-0 md:h-auto md:flex-1 md:shrink md:border-b-0 md:p-6">
+      <div className="relative flex max-h-full max-w-full items-center justify-center">
         {imageUrl && (
-          <div className={`preview-stack ${eyedropperActive ? 'eyedropper-active' : ''}`}>
+          <div className="relative max-h-full max-w-full leading-none">
             <img
               ref={imgRef}
               src={imageUrl}
               alt=""
               aria-hidden={!showBefore}
-              className="render-canvas preview-source"
+              className="block h-auto max-h-full w-auto max-w-full object-contain"
               style={{ display: showBefore ? 'block' : 'none' }}
               onLoad={onImageLoad}
             />
             <canvas
               ref={canvasRef}
-              className="render-canvas preview-output"
+              className={canvasCls}
               style={{ display: showBefore ? 'none' : 'block' }}
               onClick={handleCanvasClick}
             />
@@ -61,12 +65,16 @@ export function PreviewArea({
         )}
 
         {isProcessing && (
-          <div className="processing-badge">Processing…</div>
+          <div className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-[2px] bg-black/75 px-3.5 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-fg backdrop-blur-xs">
+            Processing…
+          </div>
         )}
 
-        <div className="preview-toolbar">
+        <div className="absolute bottom-4 left-1/2 flex -translate-x-1/2 items-center gap-4 rounded border border-border bg-[rgba(10,10,10,0.85)] px-4 py-2 backdrop-blur-sm">
           <button
-            className={`toolbar-btn ${showBefore ? 'active' : ''}`}
+            className={`flex cursor-pointer select-none items-center gap-1.5 border-0 bg-transparent p-0 text-[10px] tracking-[0.06em] transition-colors ${
+              showBefore ? 'text-fg' : 'text-fg-secondary hover:text-fg'
+            }`}
             onMouseDown={handleCompareDown}
             onMouseUp={handleCompareUp}
             onMouseLeave={handleCompareUp}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageAdjustments } from '../constants/adjustments'
 import { FILTERS, hasLutFilter, type FilterId } from '../constants/filters'
 import { isColorFirst, type PipelineOrder } from '../constants/pipeline'
+import { FULL_MAX_LONG_EDGE } from '../gpu/downscale'
 import { GpuRenderer, type RenderParams, type RenderQuality } from '../gpu/renderer'
 import { applyImageAdjustments, blendPixels, copyImageData } from '../image/adjustments'
 import {
@@ -263,9 +264,15 @@ export function useImageProcessing(
         const ctx = cpuCanvas.getContext('2d', { willReadFrequently: true })
         if (!ctx) throw new Error('Cannot get 2D context')
 
-        const w = img.naturalWidth
-        const h = img.naturalHeight
-        if (!w || !h) return
+        const natW = img.naturalWidth
+        const natH = img.naturalHeight
+        if (!natW || !natH) return
+
+        // Cap the CPU working resolution to keep memory bounded on mobile.
+        const longEdge = Math.max(natW, natH)
+        const scale = longEdge > FULL_MAX_LONG_EDGE ? FULL_MAX_LONG_EDGE / longEdge : 1
+        const w = Math.max(1, Math.round(natW * scale))
+        const h = Math.max(1, Math.round(natH * scale))
 
         cpuCanvas.width = w
         cpuCanvas.height = h

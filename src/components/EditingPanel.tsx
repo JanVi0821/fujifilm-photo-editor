@@ -25,6 +25,9 @@ type EditingPanelProps = {
   onAdjustEnd: () => void
 }
 
+const SECTION_TITLE =
+  'flex items-center justify-between border-b border-border pb-2 mb-3 text-[10px] font-semibold tracking-[0.12em] text-fg-secondary'
+
 function formatExposure(value: number) {
   const rounded = Math.round(value * 100) / 100
   if (rounded > 0) return `+${rounded.toFixed(2)}`
@@ -61,11 +64,11 @@ export function EditingPanel({
   const sliderHandlers = { onAdjustStart, onAdjustEnd }
 
   return (
-    <aside className="editing-panel">
-      <div className="panel-header">
+    <aside className="order-3 flex w-full shrink-0 flex-col border-t border-border bg-panel md:order-0 md:w-[300px] md:min-h-0 md:shrink md:overflow-hidden md:border-l md:border-t-0">
+      <div className="flex shrink-0 items-center justify-between px-5 pb-3 pt-4 text-[10px] font-semibold tracking-[0.14em] text-fg-secondary">
         <span>EDITING PANEL</span>
         <button
-          className="icon-btn-sm"
+          className="flex cursor-pointer items-center border-0 bg-transparent p-1 text-fg-muted transition-colors enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
           disabled={!canReset}
           onClick={onReset}
           title="Reset all adjustments"
@@ -79,25 +82,32 @@ export function EditingPanel({
 
       <Histogram bins={histogramBins} />
 
-      <div className="panel-sections">
-        <div className="panel-section">
-          <div className="section-title">
+      <div className="px-5 pb-5 md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <div className="mb-5">
+          <div className={SECTION_TITLE}>
             <span>PIPELINE ORDER</span>
           </div>
-          <div className="pipeline-list">
+          <div className="flex flex-col gap-1.5">
             {pipelineOrder.map((stageId, index) => {
               const stage = PIPELINE_STAGES[stageId]
               return (
-                <div key={stageId} className="pipeline-item">
-                  <span className="pipeline-step">{index + 1}</span>
-                  <div className="pipeline-info">
-                    <span className="pipeline-name">{stage.name}</span>
-                    <span className="pipeline-desc">{stage.description}</span>
+                <div
+                  key={stageId}
+                  className="flex items-center gap-2.5 rounded-md border border-border-light bg-elevated px-2.5 py-2"
+                >
+                  <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-fg text-[10px] font-bold text-panel">
+                    {index + 1}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <span className="text-[11px] font-semibold text-fg">{stage.name}</span>
+                    <span className="overflow-hidden text-ellipsis whitespace-nowrap text-[9px] text-fg-muted">
+                      {stage.description}
+                    </span>
                   </div>
-                  <div className="pipeline-move">
+                  <div className="flex shrink-0 flex-col gap-0.5">
                     <button
                       type="button"
-                      className="pipeline-move-btn"
+                      className="flex h-4 w-5 cursor-pointer items-center justify-center rounded border border-border-light bg-panel p-0 text-fg-secondary transition-colors enabled:hover:border-fg enabled:hover:bg-elevated enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-30"
                       disabled={index === 0}
                       onClick={() => onPipelineOrderChange(moveStage(pipelineOrder, index, -1))}
                       title="Move up"
@@ -109,7 +119,7 @@ export function EditingPanel({
                     </button>
                     <button
                       type="button"
-                      className="pipeline-move-btn"
+                      className="flex h-4 w-5 cursor-pointer items-center justify-center rounded border border-border-light bg-panel p-0 text-fg-secondary transition-colors enabled:hover:border-fg enabled:hover:bg-elevated enabled:hover:text-fg disabled:cursor-not-allowed disabled:opacity-30"
                       disabled={index === pipelineOrder.length - 1}
                       onClick={() => onPipelineOrderChange(moveStage(pipelineOrder, index, 1))}
                       title="Move down"
@@ -126,14 +136,14 @@ export function EditingPanel({
           </div>
         </div>
 
-        <div className="panel-section">
-          <div className="section-title">
+        <div className="mb-5">
+          <div className={SECTION_TITLE}>
             <span>BASIC</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </div>
-          <div className="section-items">
+          <div className="flex flex-col gap-3.5">
             <SliderRow
               label="Exposure"
               value={adjustments.exposure}
@@ -187,14 +197,14 @@ export function EditingPanel({
           </div>
         </div>
 
-        <div className="panel-section">
-          <div className="section-title">
+        <div className="mb-5">
+          <div className={SECTION_TITLE}>
             <span>LIGHTING</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </div>
-          <div className="section-items">
+          <div className="flex flex-col gap-3.5">
             <SliderRow
               label="Highlights"
               value={adjustments.highlights}
@@ -238,23 +248,21 @@ export function EditingPanel({
           </div>
         </div>
 
-        <div className="panel-section">
-          <div className="section-title">
+        <div className="mb-5">
+          <div className={SECTION_TITLE}>
             <span>HSL / COLOR</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="6 9 12 15 18 9" />
             </svg>
           </div>
-          <div className="section-items">
-            <HslSection
-              hsl={adjustments.hsl}
-              onChange={updateHsl}
-              eyedropperActive={eyedropperActive}
-              onEyedropperActiveChange={onEyedropperActiveChange}
-              onAdjustStart={onAdjustStart}
-              onAdjustEnd={onAdjustEnd}
-            />
-          </div>
+          <HslSection
+            hsl={adjustments.hsl}
+            onChange={updateHsl}
+            eyedropperActive={eyedropperActive}
+            onEyedropperActiveChange={onEyedropperActiveChange}
+            onAdjustStart={onAdjustStart}
+            onAdjustEnd={onAdjustEnd}
+          />
         </div>
       </div>
     </aside>

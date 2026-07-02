@@ -9,8 +9,8 @@ export function Histogram({ bins }: HistogramProps) {
   const hasData = bins.some((count) => count > 0)
 
   return (
-    <div className="histogram">
-      <svg viewBox="0 0 200 60" preserveAspectRatio="none" className="histogram-svg">
+    <div className="mx-5 mb-4 h-[60px] shrink-0 border-b border-border text-fg-secondary">
+      <svg viewBox="0 0 200 60" preserveAspectRatio="none" className="h-full w-full opacity-50">
         {hasData ? (
           <polyline
             points={path}

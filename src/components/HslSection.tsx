@@ -1,5 +1,3 @@
-import { type CSSProperties } from 'react'
-
 import {
   HSL_ADJUSTMENT_RANGE,
   HSL_HUE_RANGE,
@@ -63,11 +61,15 @@ export function HslSection({
   const atMaxTargets = hsl.targets.length >= MAX_HSL_TARGETS
 
   return (
-    <div className="hsl-section">
-      <div className="hsl-picker-row">
+    <div className="flex flex-col gap-3.5">
+      <div className="flex items-center gap-2.5">
         <button
           type="button"
-          className={`hsl-eyedropper-btn ${eyedropperActive ? 'active' : ''}`}
+          className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 bg-panel p-0 transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            eyedropperActive
+              ? 'border-fg bg-elevated text-fg'
+              : 'border-border-light text-fg-secondary enabled:hover:border-fg enabled:hover:bg-elevated enabled:hover:text-fg'
+          }`}
           onClick={toggleEyedropper}
           disabled={atMaxTargets && !eyedropperActive}
           title={atMaxTargets ? `Up to ${MAX_HSL_TARGETS} color targets` : 'Pick a color from the image'}
@@ -80,31 +82,41 @@ export function HslSection({
           </svg>
         </button>
         {eyedropperActive && (
-          <span className="hsl-eyedropper-hint">Click the image to add a target</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-accent">
+            Click the image to add a target
+          </span>
         )}
         {!eyedropperActive && hsl.targets.length === 0 && (
-          <span className="hsl-empty-hint">Use the eyedropper to pick a color</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
+            Use the eyedropper to pick a color
+          </span>
         )}
         {atMaxTargets && !eyedropperActive && (
-          <span className="hsl-empty-hint">Limit reached: {MAX_HSL_TARGETS}</span>
+          <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
+            Limit reached: {MAX_HSL_TARGETS}
+          </span>
         )}
       </div>
 
       {hsl.targets.length > 0 && (
-        <div className="hsl-target-list">
+        <div className="flex flex-wrap gap-2">
           {hsl.targets.map((target) => (
-            <div key={target.id} className="hsl-target-item">
+            <div key={target.id} className="group relative flex items-center">
               <button
                 type="button"
-                className={`hsl-swatch hsl-target-swatch ${selected?.id === target.id ? 'active' : ''}`}
-                style={{ '--swatch-color': target.pickedHex } as CSSProperties}
+                className={`h-8 w-8 shrink-0 cursor-pointer rounded-full border-2 p-0 transition-transform hover:scale-105 ${
+                  selected?.id === target.id
+                    ? 'border-fg shadow-[0_0_0_1px_var(--color-fg)]'
+                    : 'border-border-light'
+                }`}
+                style={{ backgroundColor: target.pickedHex }}
                 onClick={() => selectTarget(target.id)}
                 title={target.pickedHex}
                 aria-label={`Color target ${target.pickedHex}`}
               />
               <button
                 type="button"
-                className="hsl-target-remove"
+                className="absolute -right-1 -top-1 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-border-light bg-panel p-0 text-xs leading-none text-fg-secondary opacity-0 transition-opacity hover:bg-elevated hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
                 onClick={() => removeTarget(target.id)}
                 title="Remove this color target"
                 aria-label="Remove this color target"
@@ -118,11 +130,11 @@ export function HslSection({
 
       {selected && (
         <>
-          <div className="hsl-selected-label">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-fg-secondary">
             {selected.pickedHex.toUpperCase()} · ±{selected.hueRange}°
           </div>
 
-          <div className="section-items">
+          <div className="flex flex-col gap-3.5">
             <SliderRow
               label="Range"
               value={selected.hueRange}

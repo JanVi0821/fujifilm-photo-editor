@@ -1,53 +1,66 @@
-:root {
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', ui-monospace, monospace;
-  color-scheme: dark;
+@import 'tailwindcss';
 
-  --bg-app: #0a0a0a;
-  --bg-panel: #111111;
-  --bg-elevated: #1a1a1a;
-  --bg-hover: #222222;
-  --border: #2a2a2a;
-  --border-light: #333333;
-  --text-primary: #e8e8e8;
-  --text-secondary: #888888;
-  --text-muted: #555555;
-  --accent: #c8c8c8;
-  --accent-hover: #ffffff;
+@theme {
+  --color-app: #0a0a0a;
+  --color-panel: #111111;
+  --color-elevated: #1a1a1a;
+  --color-hover: #222222;
+  --color-border: #2a2a2a;
+  --color-border-light: #333333;
+  --color-fg: #e8e8e8;
+  --color-fg-secondary: #888888;
+  --color-fg-muted: #555555;
+  --color-accent: #c8c8c8;
+  --color-accent-hover: #ffffff;
 
-  margin: 0;
-  padding: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --font-mono: 'SF Mono', 'Fira Code', 'Consolas', ui-monospace, monospace;
+  --font-serif: 'Georgia', 'Times New Roman', serif;
 }
 
-html,
-body {
-  margin: 0;
-  height: 100%;
-  overflow: hidden;
-}
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
 
-body {
-  background: var(--bg-app);
-  color: var(--text-primary);
-}
+  html,
+  body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+  }
 
-#root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-}
+  body {
+    background: var(--color-app);
+    color: var(--color-fg);
+    font-family: var(--font-mono);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
 
-* {
-  box-sizing: border-box;
-}
+  #root {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
 
-button {
-  font-family: inherit;
-  -webkit-tap-highlight-color: transparent;
-}
+  button {
+    font-family: inherit;
+    -webkit-tap-highlight-color: transparent;
+  }
 
-a {
-  text-decoration: none;
-  color: inherit;
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  /* Thin scrollbars for scrollable panels */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-light);
+    border-radius: 2px;
+  }
 }

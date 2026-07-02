@@ -3,13 +3,12 @@ import createREGL, { type Framebuffer2D, type Regl, type Texture2D } from 'regl'
 import { MAX_HSL_TARGETS, packHslTargetsForGpu } from '../constants/hsl'
 import type { ImageAdjustments } from '../constants/adjustments'
 import type { CubeLUT } from '../lut/cube'
-import { getPreviewSize } from './downscale'
+import { FULL_MAX_LONG_EDGE, getPreviewSize } from './downscale'
 import { cubeToLutAtlas } from './lutAtlas'
 import {
   ADJUSTMENTS_FRAG,
-  BLEND_FRAG,
   DOWNSCALE_FRAG,
-  LUT_FRAG,
+  FILTER_FRAG,
   VERTEX_SHADER,
 } from './shaders'
 
@@ -20,10 +19,8 @@ const QUAD = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]
 type GpuBuffers = {
   source: Framebuffer2D
   previewSource: Framebuffer2D
-  fullLut: Framebuffer2D
   fullA: Framebuffer2D
   fullB: Framebuffer2D
-  prevLut: Framebuffer2D
   prevA: Framebuffer2D
   prevB: Framebuffer2D
 }
@@ -51,10 +48,10 @@ export class GpuRenderer {
   private fullHeight = 0
   private previewWidth = 0
   private previewHeight = 0
+  private maxFullEdge = FULL_MAX_LONG_EDGE
   private histogramSource: Framebuffer2D | null = null
 
-  private drawLut: DrawPass
-  private drawBlend: DrawPass
+  private drawFilter: DrawPass
   private drawAdjust: DrawPass
   private drawDownscale: DrawPass
   private drawPassthrough: DrawPass
@@ -77,9 +74,12 @@ export class GpuRenderer {
       },
     })
 
+    // Cap the full-resolution working size to the GPU's texture limit so we
+    // never allocate textures/framebuffers larger than the device supports.
+    this.maxFullEdge = Math.min(FULL_MAX_LONG_EDGE, this.regl.limits.maxTextureSize)
+
     this.buffers = this.createBuffers(1, 1)
-    this.drawLut = this.createDrawPass(LUT_FRAG)
-    this.drawBlend = this.createDrawPass(BLEND_FRAG)
+    this.drawFilter = this.createDrawPass(FILTER_FRAG)
     this.drawAdjust = this.createDrawPass(ADJUSTMENTS_FRAG)
     this.drawDownscale = this.createDrawPass(DOWNSCALE_FRAG)
     this.drawPassthrough = this.createDrawPass(DOWNSCALE_FRAG)
@@ -104,10 +104,8 @@ export class GpuRenderer {
     return {
       source: makeFbo(width, height),
       previewSource: makeFbo(preview.width, preview.height),
-      fullLut: makeFbo(width, height),
       fullA: makeFbo(width, height),
       fullB: makeFbo(width, height),
-      prevLut: makeFbo(preview.width, preview.height),
       prevA: makeFbo(preview.width, preview.height),
       prevB: makeFbo(preview.width, preview.height),
     }
@@ -167,26 +165,42 @@ export class GpuRenderer {
   private destroyBuffers() {
     this.buffers.source.destroy()
     this.buffers.previewSource.destroy()
-    this.buffers.fullLut.destroy()
     this.buffers.fullA.destroy()
     this.buffers.fullB.destroy()
-    this.buffers.prevLut.destroy()
     this.buffers.prevA.destroy()
     this.buffers.prevB.destroy()
   }
 
   uploadSource(image: HTMLImageElement) {
-    const width = image.naturalWidth
-    const height = image.naturalHeight
-    if (!image.complete || width <= 0 || height <= 0) {
+    const naturalWidth = image.naturalWidth
+    const naturalHeight = image.naturalHeight
+    if (!image.complete || naturalWidth <= 0 || naturalHeight <= 0) {
       throw new Error('Image not ready for GPU upload')
     }
 
+    // Clamp the working resolution to the device texture limit. Larger images
+    // are downscaled on a 2D canvas first, so we never create an oversized
+    // WebGL texture (a common cause of crashes on mobile GPUs).
+    const target = getPreviewSize(naturalWidth, naturalHeight, this.maxFullEdge)
+    const width = target.width
+    const height = target.height
+
     this.resize(width, height)
+
+    let textureSource: HTMLImageElement | HTMLCanvasElement = image
+    if (width !== naturalWidth || height !== naturalHeight) {
+      const scaleCanvas = document.createElement('canvas')
+      scaleCanvas.width = width
+      scaleCanvas.height = height
+      const scaleCtx = scaleCanvas.getContext('2d')
+      if (!scaleCtx) throw new Error('Cannot get 2D context for source downscale')
+      scaleCtx.drawImage(image, 0, 0, width, height)
+      textureSource = scaleCanvas
+    }
 
     this.sourceTexture?.destroy()
     this.sourceTexture = this.regl.texture({
-      data: image,
+      data: textureSource,
       flipY: true,
     })
 
@@ -230,7 +244,6 @@ export class GpuRenderer {
   // Filter stage: filtered = mix(input, LUT(input), strength).
   private filterInto(
     input: Framebuffer2D,
-    lutTmp: Framebuffer2D,
     out: Framebuffer2D,
     width: number,
     height: number,
@@ -238,24 +251,14 @@ export class GpuRenderer {
     strength: number,
   ) {
     this.regl({
-      framebuffer: lutTmp,
+      framebuffer: out,
       viewport: { x: 0, y: 0, width, height },
     })(() => {
-      this.drawLut({
+      this.drawFilter({
         source: input,
         lutAtlas: this.lutAtlas ?? input,
         lutSize: this.lutSize,
         hasLut: hasLut ? 1 : 0,
-      })
-    })
-
-    this.regl({
-      framebuffer: out,
-      viewport: { x: 0, y: 0, width, height },
-    })(() => {
-      this.drawBlend({
-        source: input,
-        filtered: lutTmp,
         strength,
       })
     })
@@ -343,7 +346,6 @@ export class GpuRenderer {
   private renderChainInto(
     params: RenderParams,
     srcBuffer: Framebuffer2D,
-    lutTmp: Framebuffer2D,
     bufA: Framebuffer2D,
     bufB: Framebuffer2D,
     width: number,
@@ -351,11 +353,11 @@ export class GpuRenderer {
   ): Framebuffer2D {
     if (params.colorFirst) {
       this.renderAdjustmentsToFbo(params.adj, srcBuffer, bufA, width, height)
-      this.filterInto(bufA, lutTmp, bufB, width, height, params.hasLut, params.strength)
+      this.filterInto(bufA, bufB, width, height, params.hasLut, params.strength)
       return bufB
     }
 
-    this.filterInto(srcBuffer, lutTmp, bufA, width, height, params.hasLut, params.strength)
+    this.filterInto(srcBuffer, bufA, width, height, params.hasLut, params.strength)
     this.renderAdjustmentsToFbo(params.adj, bufA, bufB, width, height)
     return bufB
   }
@@ -367,7 +369,6 @@ export class GpuRenderer {
       const final = this.renderChainInto(
         params,
         this.buffers.previewSource,
-        this.buffers.prevLut,
         this.buffers.prevA,
         this.buffers.prevB,
         this.previewWidth,
@@ -381,7 +382,6 @@ export class GpuRenderer {
     const final = this.renderChainInto(
       params,
       this.buffers.source,
-      this.buffers.fullLut,
       this.buffers.fullA,
       this.buffers.fullB,
       this.fullWidth,
@@ -429,7 +429,6 @@ export class GpuRenderer {
     const final = this.renderChainInto(
       params,
       this.buffers.source,
-      this.buffers.fullLut,
       this.buffers.fullA,
       this.buffers.fullB,
       this.fullWidth,
