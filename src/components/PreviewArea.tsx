@@ -37,13 +37,6 @@ export function PreviewArea({
   const handleCompareDown = () => setShowBefore(true)
   const handleCompareUp = () => setShowBefore(false)
 
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!eyedropperActive || showBefore) return
-    onEyedropperPick(e.clientX, e.clientY)
-    setLoupe(null)
-    pointerRef.current = null
-  }
-
   const updateLoupe = useCallback(
     (clientX: number, clientY: number, z: number) => {
       const canvas = canvasRef.current
@@ -104,9 +97,28 @@ export function PreviewArea({
     [canvasRef],
   )
 
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!eyedropperActive || showBefore) return
+    // Capture the pointer so we keep receiving move/up even if it leaves the canvas.
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    updateLoupe(e.clientX, e.clientY, zoom)
+  }
+
   const handlePointerSample = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!eyedropperActive || showBefore) return
     updateLoupe(e.clientX, e.clientY, zoom)
+  }
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!eyedropperActive || showBefore) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    // Pick the last valid sampled position (what the loupe was showing on release).
+    const pos = pointerRef.current
+    if (pos) {
+      onEyedropperPick(pos.x, pos.y)
+    }
+    pointerRef.current = null
+    setLoupe(null)
   }
 
   const hideLoupe = () => {
@@ -148,7 +160,7 @@ export function PreviewArea({
     (eyedropperActive ? ' cursor-crosshair touch-none' : '')
 
   return (
-    <main className="sticky top-0 z-20 order-1 flex h-[45vh] min-h-0 w-full min-w-0 shrink-0 items-center justify-center overflow-auto border-b border-border bg-app p-4 md:static md:z-auto md:order-0 md:h-auto md:flex-1 md:shrink md:border-b-0 md:p-6">
+    <main className="sticky top-0 z-20 order-1 flex h-[45vh] min-h-0 w-full min-w-0 shrink-0 select-none items-center justify-center overflow-auto border-b border-border bg-app p-4 [-webkit-touch-callout:none] md:static md:z-auto md:order-0 md:h-auto md:flex-1 md:shrink md:border-b-0 md:p-6">
       <div className="relative flex max-h-full max-w-full items-center justify-center">
         {imageUrl && (
           <div className="relative max-h-full max-w-full leading-none">
@@ -165,9 +177,10 @@ export function PreviewArea({
               ref={canvasRef}
               className={canvasCls}
               style={{ display: showBefore ? 'none' : 'block' }}
-              onClick={handleCanvasClick}
-              onPointerDown={handlePointerSample}
+              onPointerDown={handlePointerDown}
               onPointerMove={handlePointerSample}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={hideLoupe}
               onPointerLeave={hideLoupe}
             />
           </div>

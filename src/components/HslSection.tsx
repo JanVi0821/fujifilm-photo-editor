@@ -116,7 +116,7 @@ export function HslSection({
               />
               <button
                 type="button"
-                className="absolute -right-1 -top-1 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-border-light bg-panel p-0 text-xs leading-none text-fg-secondary opacity-0 transition-opacity hover:bg-elevated hover:text-fg focus-visible:opacity-100 group-hover:opacity-100"
+                className="absolute -right-1 -top-1 flex h-4 w-4 cursor-pointer items-center justify-center rounded-full border border-border-light bg-panel p-0 text-xs leading-none text-fg-secondary opacity-100 transition-opacity hover:bg-elevated hover:text-fg focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100"
                 onClick={() => removeTarget(target.id)}
                 title="Remove this color target"
                 aria-label="Remove this color target"

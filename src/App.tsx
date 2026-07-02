@@ -111,6 +111,13 @@ function App() {
             })
           }
         />
+
+        {/* Mobile: footer flows with the scrolling content instead of being pinned. */}
+        <StatusBar
+          filter={filter}
+          isDefaultImage={imageSource.kind === 'default'}
+          className="order-last md:hidden"
+        />
       </div>
 
       {error && (
@@ -119,7 +126,12 @@ function App() {
         </div>
       )}
 
-      <StatusBar filter={filter} isDefaultImage={imageSource.kind === 'default'} />
+      {/* Desktop: footer stays pinned at the bottom of the viewport. */}
+      <StatusBar
+        filter={filter}
+        isDefaultImage={imageSource.kind === 'default'}
+        className="hidden md:flex"
+      />
     </div>
   )
 }
