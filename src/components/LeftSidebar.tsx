@@ -1,4 +1,6 @@
 import { FILTERS, hasLutFilter, type FilterId } from '../constants/filters'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { Slider } from './ui/Slider'
 
 type LeftSidebarProps = {
   filter: FilterId
@@ -9,16 +11,6 @@ type LeftSidebarProps = {
   onAdjustEnd: () => void
 }
 
-const STRENGTH_SLIDER =
-  'appearance-none cursor-pointer bg-transparent w-full h-1 ' +
-  'md:w-1 md:h-[100px] md:[writing-mode:vertical-lr] md:[direction:rtl] ' +
-  '[&::-webkit-slider-runnable-track]:h-[2px] [&::-webkit-slider-runnable-track]:w-full [&::-webkit-slider-runnable-track]:rounded-[1px] [&::-webkit-slider-runnable-track]:bg-border-light ' +
-  'md:[&::-webkit-slider-runnable-track]:w-[2px] md:[&::-webkit-slider-runnable-track]:h-[100px] ' +
-  '[&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-fg [&::-webkit-slider-thumb]:cursor-grab [&::-webkit-slider-thumb]:-mt-[5px] ' +
-  'md:[&::-webkit-slider-thumb]:mt-0 md:[&::-webkit-slider-thumb]:-ml-[5px] ' +
-  '[&::-moz-range-track]:h-[2px] [&::-moz-range-track]:rounded-[1px] [&::-moz-range-track]:bg-border-light md:[&::-moz-range-track]:w-[2px] md:[&::-moz-range-track]:h-[100px] ' +
-  '[&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-fg [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-grab'
-
 export function LeftSidebar({
   filter,
   strength,
@@ -28,6 +20,7 @@ export function LeftSidebar({
   onAdjustEnd,
 }: LeftSidebarProps) {
   const strengthDisabled = !hasLutFilter(filter)
+  const isDesktop = useMediaQuery('(min-width: 768px)')
 
   return (
     <aside className="order-2 flex w-full shrink-0 flex-col border-b border-border bg-panel md:order-0 md:w-[88px] md:min-h-0 md:overflow-hidden md:border-b-0 md:border-r">
@@ -74,19 +67,17 @@ export function LeftSidebar({
           STRENGTH
         </span>
         <div className="flex flex-1 items-center gap-2 md:flex-none md:flex-col">
-          <input
-            type="range"
-            className={`${STRENGTH_SLIDER} ${strengthDisabled ? 'cursor-not-allowed' : ''}`}
+          <Slider
+            value={strength}
             min={0}
             max={100}
-            value={strength}
+            step={1}
             disabled={strengthDisabled}
-            onChange={(e) => onStrengthChange(Number(e.target.value))}
-            onPointerDown={onAdjustStart}
-            onPointerUp={onAdjustEnd}
-            onPointerLeave={onAdjustEnd}
-            onTouchStart={onAdjustStart}
-            onTouchEnd={onAdjustEnd}
+            orientation={isDesktop ? 'vertical' : 'horizontal'}
+            className={isDesktop ? 'h-[100px]' : 'flex-1'}
+            onChange={onStrengthChange}
+            onAdjustStart={onAdjustStart}
+            onAdjustEnd={onAdjustEnd}
             aria-label="Filter strength"
           />
           <span className="text-[10px] font-semibold tracking-[0.04em] text-fg-secondary">

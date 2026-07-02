@@ -83,17 +83,17 @@ export function HslSection({
         </button>
         {eyedropperActive && (
           <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-accent">
-            Click the image to add a target
+            Tap image to pick
           </span>
         )}
         {!eyedropperActive && hsl.targets.length === 0 && (
           <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
-            Use the eyedropper to pick a color
+            Pick a color
           </span>
         )}
         {atMaxTargets && !eyedropperActive && (
           <span className="text-[10px] font-semibold uppercase tracking-[0.06em] text-fg-muted">
-            Limit reached: {MAX_HSL_TARGETS}
+            Max {MAX_HSL_TARGETS}
           </span>
         )}
       </div>
