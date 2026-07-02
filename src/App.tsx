@@ -9,6 +9,7 @@ import { TopBar } from './components/TopBar'
 import { DEFAULT_IMAGE_ADJUSTMENTS } from './constants/adjustments'
 import { DEFAULT_FILTER, type FilterId } from './constants/filters'
 import { addHslTarget, createDefaultHslSettings } from './constants/hsl'
+import { DEFAULT_PIPELINE_ORDER, type PipelineOrder } from './constants/pipeline'
 import { useImageProcessing } from './hooks/useImageProcessing'
 import { sampleCanvasPixel } from './image/color'
 
@@ -21,6 +22,7 @@ function App() {
   const [filter, setFilter] = useState<FilterId>(DEFAULT_FILTER)
   const [strength, setStrength] = useState(80)
   const [adjustments, setAdjustments] = useState(DEFAULT_IMAGE_ADJUSTMENTS)
+  const [pipelineOrder, setPipelineOrder] = useState<PipelineOrder>(DEFAULT_PIPELINE_ORDER)
   const [eyedropperActive, setEyedropperActive] = useState(false)
 
   const {
@@ -34,7 +36,7 @@ function App() {
     exportImage,
     setAdjusting,
     setError,
-  } = useImageProcessing(imageSource, filter, strength, adjustments)
+  } = useImageProcessing(imageSource, filter, strength, adjustments, pipelineOrder)
 
   const handleUpload = (file: File) => {
     setError(null)
@@ -96,6 +98,8 @@ function App() {
         <EditingPanel
           adjustments={adjustments}
           histogramBins={histogramBins}
+          pipelineOrder={pipelineOrder}
+          onPipelineOrderChange={setPipelineOrder}
           onAdjustmentsChange={setAdjustments}
           eyedropperActive={eyedropperActive}
           onEyedropperActiveChange={setEyedropperActive}

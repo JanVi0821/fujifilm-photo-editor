@@ -3,6 +3,11 @@ import {
   isDefaultAdjustments,
   type ImageAdjustments,
 } from '../constants/adjustments'
+import {
+  PIPELINE_STAGES,
+  moveStage,
+  type PipelineOrder,
+} from '../constants/pipeline'
 import { Histogram } from './Histogram'
 import { HslSection } from './HslSection'
 import { SliderRow } from './SliderRow'
@@ -10,6 +15,8 @@ import { SliderRow } from './SliderRow'
 type EditingPanelProps = {
   adjustments: ImageAdjustments
   histogramBins: number[]
+  pipelineOrder: PipelineOrder
+  onPipelineOrderChange: (order: PipelineOrder) => void
   onAdjustmentsChange: (next: ImageAdjustments) => void
   eyedropperActive: boolean
   onEyedropperActiveChange: (active: boolean) => void
@@ -32,6 +39,8 @@ function formatSignedInt(value: number) {
 export function EditingPanel({
   adjustments,
   histogramBins,
+  pipelineOrder,
+  onPipelineOrderChange,
   onAdjustmentsChange,
   eyedropperActive,
   onEyedropperActiveChange,
@@ -71,6 +80,52 @@ export function EditingPanel({
       <Histogram bins={histogramBins} />
 
       <div className="panel-sections">
+        <div className="panel-section">
+          <div className="section-title">
+            <span>PIPELINE ORDER</span>
+          </div>
+          <div className="pipeline-list">
+            {pipelineOrder.map((stageId, index) => {
+              const stage = PIPELINE_STAGES[stageId]
+              return (
+                <div key={stageId} className="pipeline-item">
+                  <span className="pipeline-step">{index + 1}</span>
+                  <div className="pipeline-info">
+                    <span className="pipeline-name">{stage.name}</span>
+                    <span className="pipeline-desc">{stage.description}</span>
+                  </div>
+                  <div className="pipeline-move">
+                    <button
+                      type="button"
+                      className="pipeline-move-btn"
+                      disabled={index === 0}
+                      onClick={() => onPipelineOrderChange(moveStage(pipelineOrder, index, -1))}
+                      title="Move up"
+                      aria-label={`Move ${stage.name} up`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="18 15 12 9 6 15" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      className="pipeline-move-btn"
+                      disabled={index === pipelineOrder.length - 1}
+                      onClick={() => onPipelineOrderChange(moveStage(pipelineOrder, index, 1))}
+                      title="Move down"
+                      aria-label={`Move ${stage.name} down`}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
         <div className="panel-section">
           <div className="section-title">
             <span>BASIC</span>

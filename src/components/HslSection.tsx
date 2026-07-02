@@ -70,8 +70,8 @@ export function HslSection({
           className={`hsl-eyedropper-btn ${eyedropperActive ? 'active' : ''}`}
           onClick={toggleEyedropper}
           disabled={atMaxTargets && !eyedropperActive}
-          title={atMaxTargets ? `最多 ${MAX_HSL_TARGETS} 个取色` : '从画面取色并添加'}
-          aria-label="从画面取色并添加"
+          title={atMaxTargets ? `Up to ${MAX_HSL_TARGETS} color targets` : 'Pick a color from the image'}
+          aria-label="Pick a color from the image"
           aria-pressed={eyedropperActive}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -80,13 +80,13 @@ export function HslSection({
           </svg>
         </button>
         {eyedropperActive && (
-          <span className="hsl-eyedropper-hint">点击画面添加取色</span>
+          <span className="hsl-eyedropper-hint">Click the image to add a target</span>
         )}
         {!eyedropperActive && hsl.targets.length === 0 && (
-          <span className="hsl-empty-hint">使用滴管从画面取色</span>
+          <span className="hsl-empty-hint">Use the eyedropper to pick a color</span>
         )}
         {atMaxTargets && !eyedropperActive && (
-          <span className="hsl-empty-hint">已达上限 {MAX_HSL_TARGETS} 个</span>
+          <span className="hsl-empty-hint">Limit reached: {MAX_HSL_TARGETS}</span>
         )}
       </div>
 
@@ -100,14 +100,14 @@ export function HslSection({
                 style={{ '--swatch-color': target.pickedHex } as CSSProperties}
                 onClick={() => selectTarget(target.id)}
                 title={target.pickedHex}
-                aria-label={`取色 ${target.pickedHex}`}
+                aria-label={`Color target ${target.pickedHex}`}
               />
               <button
                 type="button"
                 className="hsl-target-remove"
                 onClick={() => removeTarget(target.id)}
-                title="删除此取色"
-                aria-label="删除此取色"
+                title="Remove this color target"
+                aria-label="Remove this color target"
               >
                 ×
               </button>

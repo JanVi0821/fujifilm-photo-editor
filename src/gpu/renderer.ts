@@ -19,11 +19,20 @@ const QUAD = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]
 
 type GpuBuffers = {
   source: Framebuffer2D
-  lut: Framebuffer2D
-  film: Framebuffer2D
-  previewFilm: Framebuffer2D
-  adjustPreview: Framebuffer2D
-  adjustFull: Framebuffer2D
+  previewSource: Framebuffer2D
+  fullLut: Framebuffer2D
+  fullA: Framebuffer2D
+  fullB: Framebuffer2D
+  prevLut: Framebuffer2D
+  prevA: Framebuffer2D
+  prevB: Framebuffer2D
+}
+
+export type RenderParams = {
+  adj: ImageAdjustments
+  hasLut: boolean
+  strength: number
+  colorFirst: boolean
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,7 +51,6 @@ export class GpuRenderer {
   private fullHeight = 0
   private previewWidth = 0
   private previewHeight = 0
-  private previewDirty = true
   private histogramSource: Framebuffer2D | null = null
 
   private drawLut: DrawPass
@@ -95,11 +103,13 @@ export class GpuRenderer {
 
     return {
       source: makeFbo(width, height),
-      lut: makeFbo(width, height),
-      film: makeFbo(width, height),
-      previewFilm: makeFbo(preview.width, preview.height),
-      adjustPreview: makeFbo(preview.width, preview.height),
-      adjustFull: makeFbo(width, height),
+      previewSource: makeFbo(preview.width, preview.height),
+      fullLut: makeFbo(width, height),
+      fullA: makeFbo(width, height),
+      fullB: makeFbo(width, height),
+      prevLut: makeFbo(preview.width, preview.height),
+      prevA: makeFbo(preview.width, preview.height),
+      prevB: makeFbo(preview.width, preview.height),
     }
   }
 
@@ -151,17 +161,18 @@ export class GpuRenderer {
 
     this.destroyBuffers()
     this.buffers = this.createBuffers(width, height)
-    this.previewDirty = true
     this.histogramSource = null
   }
 
   private destroyBuffers() {
     this.buffers.source.destroy()
-    this.buffers.lut.destroy()
-    this.buffers.film.destroy()
-    this.buffers.previewFilm.destroy()
-    this.buffers.adjustPreview.destroy()
-    this.buffers.adjustFull.destroy()
+    this.buffers.previewSource.destroy()
+    this.buffers.fullLut.destroy()
+    this.buffers.fullA.destroy()
+    this.buffers.fullB.destroy()
+    this.buffers.prevLut.destroy()
+    this.buffers.prevA.destroy()
+    this.buffers.prevB.destroy()
   }
 
   uploadSource(image: HTMLImageElement) {
@@ -184,6 +195,13 @@ export class GpuRenderer {
       viewport: { x: 0, y: 0, width, height },
     })(() => {
       this.drawPassthrough({ texture: this.sourceTexture! })
+    })
+
+    this.regl({
+      framebuffer: this.buffers.previewSource,
+      viewport: { x: 0, y: 0, width: this.previewWidth, height: this.previewHeight },
+    })(() => {
+      this.drawDownscale({ texture: this.buffers.source })
     })
   }
 
@@ -209,46 +227,38 @@ export class GpuRenderer {
     this.lutSize = atlas.size
   }
 
-  renderFilmPass(hasLut: boolean) {
+  // Filter stage: filtered = mix(input, LUT(input), strength).
+  private filterInto(
+    input: Framebuffer2D,
+    lutTmp: Framebuffer2D,
+    out: Framebuffer2D,
+    width: number,
+    height: number,
+    hasLut: boolean,
+    strength: number,
+  ) {
     this.regl({
-      framebuffer: this.buffers.lut,
-      viewport: { x: 0, y: 0, width: this.fullWidth, height: this.fullHeight },
+      framebuffer: lutTmp,
+      viewport: { x: 0, y: 0, width, height },
     })(() => {
       this.drawLut({
-        source: this.buffers.source,
-        lutAtlas: this.lutAtlas ?? this.buffers.source,
+        source: input,
+        lutAtlas: this.lutAtlas ?? input,
         lutSize: this.lutSize,
         hasLut: hasLut ? 1 : 0,
       })
     })
-    this.previewDirty = true
-  }
 
-  renderBlendPass(strength: number) {
     this.regl({
-      framebuffer: this.buffers.film,
-      viewport: { x: 0, y: 0, width: this.fullWidth, height: this.fullHeight },
+      framebuffer: out,
+      viewport: { x: 0, y: 0, width, height },
     })(() => {
       this.drawBlend({
-        source: this.buffers.source,
-        filtered: this.buffers.lut,
+        source: input,
+        filtered: lutTmp,
         strength,
       })
     })
-    this.previewDirty = true
-  }
-
-  private ensurePreviewFilm() {
-    if (!this.previewDirty) return
-
-    this.regl({
-      framebuffer: this.buffers.previewFilm,
-      viewport: { x: 0, y: 0, width: this.previewWidth, height: this.previewHeight },
-    })(() => {
-      this.drawDownscale({ texture: this.buffers.film })
-    })
-
-    this.previewDirty = false
   }
 
   private adjustmentProps(adj: ImageAdjustments, filmBuffer: Framebuffer2D): AdjustProps {
@@ -329,50 +339,68 @@ export class GpuRenderer {
     this.displayCtx.putImageData(imageData, 0, 0)
   }
 
-  renderAdjustments(adj: ImageAdjustments, quality: RenderQuality) {
+  // Runs the full stage chain at a single resolution and returns the final fbo.
+  private renderChainInto(
+    params: RenderParams,
+    srcBuffer: Framebuffer2D,
+    lutTmp: Framebuffer2D,
+    bufA: Framebuffer2D,
+    bufB: Framebuffer2D,
+    width: number,
+    height: number,
+  ): Framebuffer2D {
+    if (params.colorFirst) {
+      this.renderAdjustmentsToFbo(params.adj, srcBuffer, bufA, width, height)
+      this.filterInto(bufA, lutTmp, bufB, width, height, params.hasLut, params.strength)
+      return bufB
+    }
+
+    this.filterInto(srcBuffer, lutTmp, bufA, width, height, params.hasLut, params.strength)
+    this.renderAdjustmentsToFbo(params.adj, bufA, bufB, width, height)
+    return bufB
+  }
+
+  renderImage(params: RenderParams, quality: RenderQuality) {
     if (this.fullWidth <= 0 || this.fullHeight <= 0) return
 
-    const filmBuffer = quality === 'preview' ? this.getPreviewFilmTexture() : this.buffers.film
-
     if (quality === 'preview') {
-      this.renderAdjustmentsToFbo(
-        adj,
-        filmBuffer,
-        this.buffers.adjustPreview,
+      const final = this.renderChainInto(
+        params,
+        this.buffers.previewSource,
+        this.buffers.prevLut,
+        this.buffers.prevA,
+        this.buffers.prevB,
         this.previewWidth,
         this.previewHeight,
       )
-      this.histogramSource = this.buffers.adjustPreview
-      this.presentFromFbo(this.buffers.adjustPreview, this.previewWidth, this.previewHeight)
+      this.histogramSource = final
+      this.presentFromFbo(final, this.previewWidth, this.previewHeight)
       return
     }
 
-    this.renderAdjustmentsToFbo(
-      adj,
-      filmBuffer,
-      this.buffers.adjustFull,
+    const final = this.renderChainInto(
+      params,
+      this.buffers.source,
+      this.buffers.fullLut,
+      this.buffers.fullA,
+      this.buffers.fullB,
       this.fullWidth,
       this.fullHeight,
     )
 
     this.regl({
-      framebuffer: this.buffers.adjustPreview,
+      framebuffer: this.buffers.prevB,
       viewport: { x: 0, y: 0, width: this.previewWidth, height: this.previewHeight },
     })(() => {
-      this.drawDownscale({ texture: this.buffers.adjustFull })
+      this.drawDownscale({ texture: final })
     })
 
-    this.histogramSource = this.buffers.adjustPreview
-    this.presentFromFbo(this.buffers.adjustPreview, this.previewWidth, this.previewHeight)
-  }
-
-  private getPreviewFilmTexture(): Framebuffer2D {
-    this.ensurePreviewFilm()
-    return this.buffers.previewFilm
+    this.histogramSource = this.buffers.prevB
+    this.presentFromFbo(this.buffers.prevB, this.previewWidth, this.previewHeight)
   }
 
   readScreenPixels(): { data: Uint8Array; width: number; height: number } | null {
-    const source = this.histogramSource ?? this.buffers.adjustPreview
+    const source = this.histogramSource ?? this.buffers.prevB
     const width = this.previewWidth
     const height = this.previewHeight
     if (width <= 0 || height <= 0) return null
@@ -397,16 +425,18 @@ export class GpuRenderer {
       : { width: this.fullWidth, height: this.fullHeight }
   }
 
-  async exportFullResolution(adj: ImageAdjustments): Promise<HTMLCanvasElement> {
-    this.renderAdjustmentsToFbo(
-      adj,
-      this.buffers.film,
-      this.buffers.adjustFull,
+  async exportFullResolution(params: RenderParams): Promise<HTMLCanvasElement> {
+    const final = this.renderChainInto(
+      params,
+      this.buffers.source,
+      this.buffers.fullLut,
+      this.buffers.fullA,
+      this.buffers.fullB,
       this.fullWidth,
       this.fullHeight,
     )
 
-    const imageData = this.readFboPixels(this.buffers.adjustFull, this.fullWidth, this.fullHeight)
+    const imageData = this.readFboPixels(final, this.fullWidth, this.fullHeight)
 
     const canvas = document.createElement('canvas')
     canvas.width = this.fullWidth
