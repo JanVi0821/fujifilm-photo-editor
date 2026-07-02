@@ -1,73 +1,90 @@
-# React + TypeScript + Vite
+# Fujifilm Photo Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser-based photo editor that recreates the look of Fujifilm film simulations and lets you fine-tune color and tone in real time — all on the GPU, entirely client-side.
 
-Currently, two official plugins are available:
+**Live site: [fuji-filter.jan0821.com](https://fuji-filter.jan0821.com)**
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+Your photos never leave your device: decoding, filtering, and adjustments all run locally in the browser via WebGL.
 
-## React Compiler
+## Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Film simulations
 
-## Expanding the ESLint configuration
+Eleven Fujifilm-style looks driven by 3D LUTs (`.cube`), plus an "off" option:
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Provia · Velvia · Classic Chrome · Classic Neg · Nostalgic Neg · Astia · Eterna · Bleach Bypass · Pro Neg Std · Pro Neg Hi · Reala Ace
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- **Strength blend** — dial any simulation from 0–100% to taste.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### Color & tone adjustments
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- **Basic** — Exposure, Contrast, Saturation, Temperature, Tint
+- **Lighting** — Highlights, Shadows, Whites, Blacks
+- **HSL / Color** — pick colors directly from the image with the eyedropper and adjust each target's Hue, Saturation, and Luminance independently. Add multiple color targets, tune each one's hue range, and remove them at will.
+
+### Customizable pipeline order
+
+Choose whether the **Film Simulation** stage or the **Color & Tone** stage is applied first, and reorder the two at any time. The same filter and settings can produce distinctly different results depending on the order.
+
+### More
+
+- **Live histogram** of the processed result
+- **Before / after** compare (press and hold)
+- **Upload your own image** or start from the built-in sample
+- **Full-resolution PNG export**
+
+## Performance
+
+The rendering pipeline is built for responsiveness on large images:
+
+- **GPU-accelerated** color grading and LUT sampling via [`regl`](https://github.com/regl-project/regl) (WebGL), running on offscreen framebuffers.
+- **Interactive preview** renders a downscaled version while you drag sliders, then re-renders at **full resolution** on release and for export.
+- **Automatic CPU fallback** if WebGL is unavailable, so the editor still works everywhere.
+
+The pipeline is order-aware and unified across both stages:
+
+```
+Filter first:  source → Film Simulation → Color & Tone → display
+Color first:   source → Color & Tone → Film Simulation → display
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Tech stack
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- **React 19** + **TypeScript**
+- **Vite 7** for dev/build tooling
+- **regl** for the WebGL rendering pipeline
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Getting started
+
+```bash
+# install dependencies
+npm install
+
+# start the dev server (http://localhost:5173)
+npm run dev
+
+# type-check and build for production
+npm run build
+
+# preview the production build
+npm run preview
 ```
+
+## Project structure
+
+```
+src/
+  components/        UI: sidebar, editing panel, preview, histogram, sliders
+  constants/         Adjustment ranges, filters, HSL model, pipeline order
+  gpu/               WebGL renderer, shaders, LUT atlas, downscaling
+  hooks/             useImageProcessing — the render orchestration
+  image/             CPU fallback: adjustments, HSL, color, histogram
+  lut/               .cube LUT parsing and sampling
+public/
+  luts/              Fujifilm-style .cube LUT files
+  sample.jpg         Built-in sample image
+```
+
+## License
+
+Personal project. LUTs are used for demonstration purposes.
