@@ -7,14 +7,24 @@ import { FULL_MAX_LONG_EDGE, getPreviewSize } from './downscale'
 import { cubeToLutAtlas } from './lutAtlas'
 import {
   ADJUSTMENTS_FRAG,
+  BLUR_FRAG,
   DOWNSCALE_FRAG,
   FILTER_FRAG,
+  FINISH_FRAG,
+  HALATION_EXTRACT_FRAG,
   VERTEX_SHADER,
 } from './shaders'
 
 export type RenderQuality = 'preview' | 'full'
 
 const QUAD = [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]
+
+// The halation bloom is computed at a small fixed resolution: the blur stays
+// cheap and wide, and the result is bilinearly upscaled during compositing.
+const HALO_MAX_EDGE = 320
+
+// Warm red-orange cast characteristic of film halation.
+const HALATION_TINT: [number, number, number] = [1.0, 0.35, 0.12]
 
 type GpuBuffers = {
   source: Framebuffer2D
@@ -23,6 +33,8 @@ type GpuBuffers = {
   fullB: Framebuffer2D
   prevA: Framebuffer2D
   prevB: Framebuffer2D
+  haloA: Framebuffer2D
+  haloB: Framebuffer2D
 }
 
 export type RenderParams = {
@@ -48,6 +60,8 @@ export class GpuRenderer {
   private fullHeight = 0
   private previewWidth = 0
   private previewHeight = 0
+  private haloWidth = 0
+  private haloHeight = 0
   private maxFullEdge = FULL_MAX_LONG_EDGE
   private histogramSource: Framebuffer2D | null = null
 
@@ -55,6 +69,9 @@ export class GpuRenderer {
   private drawAdjust: DrawPass
   private drawDownscale: DrawPass
   private drawPassthrough: DrawPass
+  private drawHaloExtract: DrawPass
+  private drawBlur: DrawPass
+  private drawFinish: DrawPass
 
   constructor(displayCanvas: HTMLCanvasElement) {
     this.displayCanvas = displayCanvas
@@ -83,20 +100,78 @@ export class GpuRenderer {
     this.drawAdjust = this.createDrawPass(ADJUSTMENTS_FRAG)
     this.drawDownscale = this.createDrawPass(DOWNSCALE_FRAG)
     this.drawPassthrough = this.createDrawPass(DOWNSCALE_FRAG)
+    this.drawHaloExtract = this.createHaloExtractPass()
+    this.drawBlur = this.createBlurPass()
+    this.drawFinish = this.createFinishPass()
+  }
+
+  private createHaloExtractPass(): DrawPass {
+    return this.regl({
+      vert: VERTEX_SHADER,
+      frag: HALATION_EXTRACT_FRAG,
+      attributes: { position: QUAD },
+      uniforms: {
+        uSource: this.regl.prop<HaloExtractProps, 'source'>('source'),
+        uThreshold: this.regl.prop<HaloExtractProps, 'threshold'>('threshold'),
+      },
+      count: 6,
+    })
+  }
+
+  private createBlurPass(): DrawPass {
+    return this.regl({
+      vert: VERTEX_SHADER,
+      frag: BLUR_FRAG,
+      attributes: { position: QUAD },
+      uniforms: {
+        uTex: this.regl.prop<BlurProps, 'tex'>('tex'),
+        uDir: this.regl.prop<BlurProps, 'dir'>('dir'),
+      },
+      count: 6,
+    })
+  }
+
+  private createFinishPass(): DrawPass {
+    return this.regl({
+      vert: VERTEX_SHADER,
+      frag: FINISH_FRAG,
+      attributes: { position: QUAD },
+      uniforms: {
+        uTexture: this.regl.prop<FinishProps, 'texture'>('texture'),
+        uHalo: this.regl.prop<FinishProps, 'halo'>('halo'),
+        uResolution: this.regl.prop<FinishProps, 'resolution'>('resolution'),
+        uGrain: this.regl.prop<FinishProps, 'grain'>('grain'),
+        uGrainSize: this.regl.prop<FinishProps, 'grainSize'>('grainSize'),
+        uHalation: this.regl.prop<FinishProps, 'halation'>('halation'),
+        uHalationTint: this.regl.prop<FinishProps, 'tint'>('tint'),
+      },
+      count: 6,
+    })
   }
 
   private createBuffers(width: number, height: number): GpuBuffers {
     const preview = getPreviewSize(width, height)
+    const halo = getPreviewSize(width, height, HALO_MAX_EDGE)
     this.fullWidth = width
     this.fullHeight = height
     this.previewWidth = preview.width
     this.previewHeight = preview.height
+    this.haloWidth = halo.width
+    this.haloHeight = halo.height
 
     const makeFbo = (w: number, h: number) =>
       this.regl.framebuffer({
         width: w,
         height: h,
         colorType: 'uint8',
+        depth: false,
+        stencil: false,
+      })
+
+    // Linear filtering so the small bloom buffer upscales smoothly.
+    const makeLinearFbo = (w: number, h: number) =>
+      this.regl.framebuffer({
+        color: this.regl.texture({ width: w, height: h, min: 'linear', mag: 'linear', wrap: 'clamp' }),
         depth: false,
         stencil: false,
       })
@@ -108,6 +183,8 @@ export class GpuRenderer {
       fullB: makeFbo(width, height),
       prevA: makeFbo(preview.width, preview.height),
       prevB: makeFbo(preview.width, preview.height),
+      haloA: makeLinearFbo(halo.width, halo.height),
+      haloB: makeLinearFbo(halo.width, halo.height),
     }
   }
 
@@ -169,6 +246,8 @@ export class GpuRenderer {
     this.buffers.fullB.destroy()
     this.buffers.prevA.destroy()
     this.buffers.prevB.destroy()
+    this.buffers.haloA.destroy()
+    this.buffers.haloB.destroy()
   }
 
   uploadSource(image: HTMLImageElement) {
@@ -362,11 +441,63 @@ export class GpuRenderer {
     return bufB
   }
 
+  private hasFinish(params: RenderParams): boolean {
+    const { grain, halation } = params.adj.film
+    return grain > 0 || halation > 0
+  }
+
+  // Build the blurred halation bloom from an input color buffer into haloA.
+  private buildHalo(input: Framebuffer2D, threshold: number) {
+    const { haloA, haloB } = this.buffers
+    const w = this.haloWidth
+    const h = this.haloHeight
+
+    this.regl({ framebuffer: haloA, viewport: { x: 0, y: 0, width: w, height: h } })(() => {
+      this.drawHaloExtract({ source: input, threshold: threshold / 100 })
+    })
+    this.regl({ framebuffer: haloB, viewport: { x: 0, y: 0, width: w, height: h } })(() => {
+      this.drawBlur({ tex: haloA, dir: [1 / w, 0] })
+    })
+    this.regl({ framebuffer: haloA, viewport: { x: 0, y: 0, width: w, height: h } })(() => {
+      this.drawBlur({ tex: haloB, dir: [0, 1 / h] })
+    })
+  }
+
+  // Final film-finish pass: halation bloom + grain, composited into `out`.
+  private finishInto(
+    input: Framebuffer2D,
+    out: Framebuffer2D,
+    width: number,
+    height: number,
+    params: RenderParams,
+  ) {
+    const film = params.adj.film
+    if (film.halation > 0) {
+      this.buildHalo(input, film.halationThreshold)
+    }
+
+    this.regl({
+      framebuffer: out,
+      viewport: { x: 0, y: 0, width, height },
+    })(() => {
+      this.drawFinish({
+        texture: input,
+        halo: this.buffers.haloA,
+        resolution: [width, height],
+        grain: film.grain / 100,
+        grainSize: film.grainSize,
+        halation: film.halation / 100,
+        tint: HALATION_TINT,
+      })
+    })
+  }
+
   renderImage(params: RenderParams, quality: RenderQuality) {
     if (this.fullWidth <= 0 || this.fullHeight <= 0) return
+    const applyFinish = this.hasFinish(params)
 
     if (quality === 'preview') {
-      const final = this.renderChainInto(
+      const chained = this.renderChainInto(
         params,
         this.buffers.previewSource,
         this.buffers.prevA,
@@ -374,12 +505,21 @@ export class GpuRenderer {
         this.previewWidth,
         this.previewHeight,
       )
+
+      let final = chained
+      if (applyFinish) {
+        // chained === prevB, so prevA is free to receive the finished output.
+        const out = chained === this.buffers.prevB ? this.buffers.prevA : this.buffers.prevB
+        this.finishInto(chained, out, this.previewWidth, this.previewHeight, params)
+        final = out
+      }
+
       this.histogramSource = final
       this.presentFromFbo(final, this.previewWidth, this.previewHeight)
       return
     }
 
-    const final = this.renderChainInto(
+    const chained = this.renderChainInto(
       params,
       this.buffers.source,
       this.buffers.fullA,
@@ -388,15 +528,23 @@ export class GpuRenderer {
       this.fullHeight,
     )
 
+    // Downscale to preview size, then apply the film finish at display resolution
+    // so grain and bloom look consistent on screen.
     this.regl({
       framebuffer: this.buffers.prevB,
       viewport: { x: 0, y: 0, width: this.previewWidth, height: this.previewHeight },
     })(() => {
-      this.drawDownscale({ texture: final })
+      this.drawDownscale({ texture: chained })
     })
 
-    this.histogramSource = this.buffers.prevB
-    this.presentFromFbo(this.buffers.prevB, this.previewWidth, this.previewHeight)
+    let final = this.buffers.prevB
+    if (applyFinish) {
+      this.finishInto(this.buffers.prevB, this.buffers.prevA, this.previewWidth, this.previewHeight, params)
+      final = this.buffers.prevA
+    }
+
+    this.histogramSource = final
+    this.presentFromFbo(final, this.previewWidth, this.previewHeight)
   }
 
   readScreenPixels(): { data: Uint8Array; width: number; height: number } | null {
@@ -426,7 +574,7 @@ export class GpuRenderer {
   }
 
   async exportFullResolution(params: RenderParams): Promise<HTMLCanvasElement> {
-    const final = this.renderChainInto(
+    const chained = this.renderChainInto(
       params,
       this.buffers.source,
       this.buffers.fullA,
@@ -434,6 +582,14 @@ export class GpuRenderer {
       this.fullWidth,
       this.fullHeight,
     )
+
+    let final = chained
+    if (this.hasFinish(params)) {
+      // chained === fullB, so fullA is free to receive the finished output.
+      const out = chained === this.buffers.fullB ? this.buffers.fullA : this.buffers.fullB
+      this.finishInto(chained, out, this.fullWidth, this.fullHeight, params)
+      final = out
+    }
 
     const imageData = this.readFboPixels(final, this.fullWidth, this.fullHeight)
 
@@ -466,6 +622,26 @@ type BlendProps = {
   source: Framebuffer2D
   filtered: Framebuffer2D
   strength: number
+}
+
+type HaloExtractProps = {
+  source: Framebuffer2D
+  threshold: number
+}
+
+type BlurProps = {
+  tex: Framebuffer2D
+  dir: [number, number]
+}
+
+type FinishProps = {
+  texture: Framebuffer2D
+  halo: Framebuffer2D
+  resolution: [number, number]
+  grain: number
+  grainSize: number
+  halation: number
+  tint: [number, number, number]
 }
 
 type TextureProps = {

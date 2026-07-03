@@ -1,5 +1,6 @@
 import {
   ADJUSTMENT_RANGES,
+  FILM_RANGES,
   isDefaultAdjustments,
   type ImageAdjustments,
 } from '../constants/adjustments'
@@ -59,6 +60,10 @@ export function EditingPanel({
 
   const updateHsl = (hsl: ImageAdjustments['hsl']) => {
     onAdjustmentsChange({ ...adjustments, hsl })
+  }
+
+  const updateFilm = (key: keyof ImageAdjustments['film'], value: number) => {
+    onAdjustmentsChange({ ...adjustments, film: { ...adjustments.film, [key]: value } })
   }
 
   const sliderHandlers = { onAdjustStart, onAdjustEnd }
@@ -263,6 +268,59 @@ export function EditingPanel({
             onAdjustStart={onAdjustStart}
             onAdjustEnd={onAdjustEnd}
           />
+        </div>
+
+        <div className="mb-5">
+          <div className={SECTION_TITLE}>
+            <span>FILM</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+          <div className="flex flex-col gap-3.5">
+            <SliderRow
+              label="Grain"
+              value={adjustments.film.grain}
+              min={FILM_RANGES.grain.min}
+              max={FILM_RANGES.grain.max}
+              step={FILM_RANGES.grain.step}
+              displayValue={String(adjustments.film.grain)}
+              onChange={(v) => updateFilm('grain', v)}
+              {...sliderHandlers}
+            />
+            <SliderRow
+              label="Grain Size"
+              value={adjustments.film.grainSize}
+              min={FILM_RANGES.grainSize.min}
+              max={FILM_RANGES.grainSize.max}
+              step={FILM_RANGES.grainSize.step}
+              displayValue={adjustments.film.grainSize.toFixed(1)}
+              onChange={(v) => updateFilm('grainSize', v)}
+              disabled={adjustments.film.grain === 0}
+              {...sliderHandlers}
+            />
+            <SliderRow
+              label="Halation"
+              value={adjustments.film.halation}
+              min={FILM_RANGES.halation.min}
+              max={FILM_RANGES.halation.max}
+              step={FILM_RANGES.halation.step}
+              displayValue={String(adjustments.film.halation)}
+              onChange={(v) => updateFilm('halation', v)}
+              {...sliderHandlers}
+            />
+            <SliderRow
+              label="Halation Point"
+              value={adjustments.film.halationThreshold}
+              min={FILM_RANGES.halationThreshold.min}
+              max={FILM_RANGES.halationThreshold.max}
+              step={FILM_RANGES.halationThreshold.step}
+              displayValue={`${adjustments.film.halationThreshold}%`}
+              onChange={(v) => updateFilm('halationThreshold', v)}
+              disabled={adjustments.film.halation === 0}
+              {...sliderHandlers}
+            />
+          </div>
         </div>
       </div>
     </aside>

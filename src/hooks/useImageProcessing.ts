@@ -6,6 +6,7 @@ import { isColorFirst, type PipelineOrder } from '../constants/pipeline'
 import { FULL_MAX_LONG_EDGE } from '../gpu/downscale'
 import { GpuRenderer, type RenderParams, type RenderQuality } from '../gpu/renderer'
 import { applyImageAdjustments, blendPixels, copyImageData } from '../image/adjustments'
+import { applyFilmEffects } from '../image/film'
 import {
   computeLuminanceHistogram,
   computeLuminanceHistogramFromPixels,
@@ -127,9 +128,12 @@ export function useImageProcessing(
     }
     const colorStage = (img: ImageData): ImageData => applyImageAdjustments(img, adj)
 
-    return colorFirstRef.current
+    const ordered = colorFirstRef.current
       ? filterStage(colorStage(input))
       : colorStage(filterStage(input))
+
+    // Film grain + halation are a final "finish", independent of stage order.
+    return applyFilmEffects(ordered, adj.film)
   }, [])
 
   const updateHistogram = useCallback(

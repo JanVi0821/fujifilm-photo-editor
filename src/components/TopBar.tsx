@@ -13,7 +13,7 @@ export function TopBar({ onExport, onUpload, canExport, isProcessing }: TopBarPr
     <header className="flex h-[52px] shrink-0 items-center justify-between border-b border-border bg-panel px-4 md:px-6">
       <div className="flex items-center gap-8">
         <h1 className="m-0 font-serif text-[16px] font-normal tracking-[0.02em] text-fg md:text-[18px]">
-          Fujifilm Editor
+          Fujifilm Simulator
         </h1>
       </div>
 

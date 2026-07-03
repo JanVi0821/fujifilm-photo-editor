@@ -125,6 +125,83 @@ void main() {
 }
 `
 
+// Extract highlights above a luminance threshold (for the halation bloom).
+export const HALATION_EXTRACT_FRAG = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uSource;
+uniform float uThreshold;
+
+void main() {
+  vec3 c = texture2D(uSource, vUv).rgb;
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float m = smoothstep(uThreshold, min(uThreshold + 0.2, 1.0), l);
+  gl_FragColor = vec4(c * m, 1.0);
+}
+`
+
+// Separable 9-tap Gaussian blur; uDir is the per-tap texel step (x or y).
+export const BLUR_FRAG = `
+precision mediump float;
+varying vec2 vUv;
+uniform sampler2D uTex;
+uniform vec2 uDir;
+
+void main() {
+  vec3 sum = vec3(0.0);
+  sum += texture2D(uTex, vUv + uDir * -4.0).rgb * 0.05;
+  sum += texture2D(uTex, vUv + uDir * -3.0).rgb * 0.09;
+  sum += texture2D(uTex, vUv + uDir * -2.0).rgb * 0.12;
+  sum += texture2D(uTex, vUv + uDir * -1.0).rgb * 0.15;
+  sum += texture2D(uTex, vUv).rgb * 0.18;
+  sum += texture2D(uTex, vUv + uDir * 1.0).rgb * 0.15;
+  sum += texture2D(uTex, vUv + uDir * 2.0).rgb * 0.12;
+  sum += texture2D(uTex, vUv + uDir * 3.0).rgb * 0.09;
+  sum += texture2D(uTex, vUv + uDir * 4.0).rgb * 0.05;
+  gl_FragColor = vec4(sum, 1.0);
+}
+`
+
+// Final "film finish" stage: warm halation bloom + procedural grain.
+export const FINISH_FRAG = `
+precision highp float;
+varying vec2 vUv;
+uniform sampler2D uTexture;
+uniform sampler2D uHalo;
+uniform vec2 uResolution;
+uniform float uGrain;
+uniform float uGrainSize;
+uniform float uHalation;
+uniform vec3 uHalationTint;
+
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+void main() {
+  vec3 c = texture2D(uTexture, vUv).rgb;
+
+  if (uHalation > 0.0) {
+    vec3 halo = texture2D(uHalo, vUv).rgb;
+    float h = max(max(halo.r, halo.g), halo.b);
+    vec3 glow = uHalationTint * h * uHalation * 1.3;
+    // Screen blend so the bloom lifts highlights without hard clipping.
+    c = 1.0 - (1.0 - c) * (1.0 - clamp(glow, 0.0, 1.0));
+  }
+
+  if (uGrain > 0.0) {
+    vec2 gcoord = floor(vUv * uResolution / max(uGrainSize, 1.0));
+    float n = hash(gcoord) - 0.5;
+    float l = dot(c, vec3(0.299, 0.587, 0.114));
+    // Grain is most visible in the midtones, subtler in deep shadows / highlights.
+    float lumaMod = 1.0 - abs(l - 0.5) * 0.9;
+    c += n * uGrain * 0.14 * (0.35 + 0.65 * lumaMod);
+  }
+
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}
+`
+
 export const ADJUSTMENTS_FRAG = `
 precision highp float;
 varying vec2 vUv;
